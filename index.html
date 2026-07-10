@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lớp học · Điểm danh & Nộp bài</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --ink:#12263A;        /* xanh mực */
+    --board:#1E4D45;      /* xanh bảng */
+    --chalk:#F2F7F5;      /* trắng phấn */
+    --mark:#FFC53D;       /* vàng bút dạ quang */
+    --line:#C9D6D2;
+    --ok:#2F9E62;
+    --err:#C6423F;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Be Vietnam Pro',system-ui,sans-serif;
+    background:var(--chalk);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  header{
+    background:var(--board);
+    color:var(--chalk);
+    padding:20px clamp(16px,5vw,48px);
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    flex-wrap:wrap;
+  }
+  header h1{font-weight:900;font-size:clamp(18px,3vw,24px);letter-spacing:-.02em}
+  header h1 span{color:var(--mark)}
+  #userBox{display:flex;align-items:center;gap:10px;font-size:14px}
+  #userBox img{width:34px;height:34px;border-radius:50%;border:2px solid var(--mark)}
+
+  main{max-width:860px;margin:0 auto;padding:clamp(20px,4vw,40px) 16px 80px}
+
+  /* ---- Thẻ điểm danh: con dấu ---- */
+  .stamp-card{
+    background:#fff;border:1px solid var(--line);border-radius:16px;
+    padding:32px 24px;text-align:center;margin-bottom:36px;
+  }
+  .stamp-card p.date{font-size:14px;color:#5B6E7B;margin-bottom:18px}
+  #stampBtn{
+    width:150px;height:150px;border-radius:50%;
+    border:5px double var(--board);
+    background:#fff;color:var(--board);
+    font-family:inherit;font-weight:900;font-size:20px;line-height:1.2;
+    cursor:pointer;transition:transform .12s ease, background .2s, color .2s;
+    text-transform:uppercase;letter-spacing:.04em;
+  }
+  #stampBtn:hover{background:var(--mark);transform:rotate(-4deg) scale(1.04)}
+  #stampBtn:focus-visible{outline:3px solid var(--mark);outline-offset:4px}
+  #stampBtn:active{transform:rotate(-8deg) scale(.94)}
+  #stampBtn.done{
+    background:var(--board);color:var(--mark);border-color:var(--mark);
+    transform:rotate(-8deg);cursor:default;
+  }
+  #stampBtn:disabled{opacity:.9}
+  .msg{margin-top:14px;font-size:14px;min-height:20px}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--err)}
+
+  /* ---- Danh sách bài tập ---- */
+  h2{font-size:16px;font-weight:700;text-transform:uppercase;
+     letter-spacing:.08em;color:var(--board);margin-bottom:14px;
+     border-bottom:3px solid var(--mark);display:inline-block;padding-bottom:4px}
+  .assignment{
+    background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:18px 20px;margin-bottom:14px;
+  }
+  .assignment h3{font-size:17px;font-weight:700;margin-bottom:4px}
+  .assignment .meta{font-size:13px;color:#5B6E7B;margin-bottom:8px}
+  .assignment .meta b{color:var(--err)}
+  .assignment p.desc{font-size:14px;margin-bottom:12px;white-space:pre-line}
+  .assignment textarea{
+    width:100%;min-height:80px;border:1px solid var(--line);border-radius:8px;
+    padding:10px;font-family:inherit;font-size:14px;resize:vertical;margin-bottom:10px;
+  }
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .assignment input[type=file]{font-size:13px;max-width:100%}
+  button.submit{
+    background:var(--board);color:#fff;border:none;border-radius:8px;
+    padding:10px 22px;font-family:inherit;font-weight:700;font-size:14px;
+    cursor:pointer;transition:background .2s;
+  }
+  button.submit:hover{background:#173B35}
+  button.submit:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+  button.submit:disabled{opacity:.5;cursor:not-allowed}
+  a.clslink{font-size:13px;color:var(--board);font-weight:500}
+
+  #loginGate{
+    text-align:center;padding:60px 20px;
+  }
+  #loginGate p{margin-bottom:20px;font-size:15px;color:#425663}
+  .hidden{display:none}
+  #loading{font-size:14px;color:#5B6E7B}
+
+  @media (prefers-reduced-motion: reduce){
+    #stampBtn{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Lớp học <span>online</span></h1>
+  <div id="userBox" class="hidden">
+    <img id="userPic" alt="">
+    <span id="userName"></span>
+  </div>
+</header>
+
+<main>
+  <!-- Chưa đăng nhập -->
+  <section id="loginGate">
+    <p>Đăng nhập bằng tài khoản Google của em để điểm danh và nộp bài.</p>
+    <div id="gBtn"></div>
+  </section>
+
+  <!-- Đã đăng nhập -->
+  <section id="app" class="hidden">
+    <div class="stamp-card">
+      <p class="date" id="todayLabel"></p>
+      <button id="stampBtn" onclick="doAttendance()">Điểm<br>danh</button>
+      <p class="msg" id="attMsg"></p>
+    </div>
+
+    <h2>Bài tập</h2>
+    <p id="loading">Đang tải danh sách bài tập…</p>
+    <div id="assignmentList"></div>
+  </section>
+</main>
+
+<script>
+/* ====== CẤU HÌNH ====== */
+const API_URL   = 'https://script.google.com/macros/s/AKfycbzrjntpOKkR2FGJHcRDVq0whGqrmbSOMckbbcJBkkqt5nsvuHrYQTAcNBEkHWFNs2rz2g/exec';
+const CLIENT_ID = '386110377624-o731ea9cbof5fccheab6b5asarqjj9ka.apps.googleusercontent.com';
+
+/* ====== TRẠNG THÁI ====== */
+let user = null; // {email, name, picture}
+
+/* ====== ĐĂNG NHẬP GOOGLE ====== */
+window.onload = () => {
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: onSignIn
+  });
+  google.accounts.id.renderButton(
+    document.getElementById('gBtn'),
+    { theme:'filled_blue', size:'large', text:'signin_with', locale:'vi' }
+  );
+
+  const d = new Date();
+  document.getElementById('todayLabel').textContent =
+    'Buổi học ngày ' + d.toLocaleDateString('vi-VN', {weekday:'long', day:'numeric', month:'numeric', year:'numeric'});
+};
+
+function onSignIn(res){
+  // Giải mã JWT (chỉ đọc thông tin hiển thị, không dùng làm bảo mật phía client)
+  const payload = JSON.parse(atob(res.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+  user = { email: payload.email, name: payload.name, picture: payload.picture };
+
+  document.getElementById('loginGate').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('userBox').classList.remove('hidden');
+  document.getElementById('userName').textContent = user.name;
+  document.getElementById('userPic').src = user.picture;
+
+  loadAssignments();
+}
+
+/* ====== GỌI API ====== */
+async function api(method, body){
+  const opt = { method };
+  if (body){
+    opt.body = JSON.stringify(body);
+    // dùng text/plain để tránh CORS preflight với Apps Script
+    opt.headers = { 'Content-Type':'text/plain;charset=utf-8' };
+  }
+  const r = await fetch(API_URL + (method==='GET' ? '?action=assignments' : ''), opt);
+  return r.json();
+}
+
+/* ====== ĐIỂM DANH ====== */
+async function doAttendance(){
+  const btn = document.getElementById('stampBtn');
+  const msg = document.getElementById('attMsg');
+  btn.disabled = true;
+  msg.textContent = 'Đang gửi…'; msg.className = 'msg';
+  try{
+    const res = await api('POST', {
+      action:'attendance', email:user.email, name:user.name,
+      session: new Date().toISOString().slice(0,10)
+    });
+    if (res.ok){
+      btn.classList.add('done');
+      btn.innerHTML = 'Đã<br>điểm danh';
+      msg.textContent = res.message; msg.className = 'msg ok';
+    } else {
+      msg.textContent = res.error || 'Có lỗi xảy ra'; msg.className = 'msg err';
+      btn.disabled = false;
+    }
+  }catch(e){
+    msg.textContent = 'Không kết nối được máy chủ. Thử lại nhé.'; msg.className='msg err';
+    btn.disabled = false;
+  }
+}
+
+/* ====== BÀI TẬP ====== */
+async function loadAssignments(){
+  const list = document.getElementById('assignmentList');
+  const loading = document.getElementById('loading');
+  try{
+    const res = await api('GET');
+    loading.classList.add('hidden');
+    if (!res.assignments || res.assignments.length === 0){
+      list.innerHTML = '<p style="font-size:14px;color:#5B6E7B">Chưa có bài tập nào. Quay lại sau nhé!</p>';
+      return;
+    }
+    list.innerHTML = res.assignments.reverse().map(a => `
+      <div class="assignment" data-id="${esc(a.ID)}">
+        <h3>${esc(a.TieuDe)}</h3>
+        <div class="meta">${esc(a.Lop)}${a.HanNop ? ' · Hạn nộp: <b>'+esc(a.HanNop)+'</b>' : ''}</div>
+        ${a.MoTa ? '<p class="desc">'+esc(a.MoTa)+'</p>' : ''}
+        <textarea placeholder="Câu trả lời của em (nếu có)…"></textarea>
+        <div class="row">
+          <input type="file">
+          <button class="submit" onclick="submitWork(this)">Nộp bài</button>
+          ${a.Link ? '<a class="clslink" href="'+esc(a.Link)+'" target="_blank" rel="noopener">Mở trên Classroom ↗</a>' : ''}
+        </div>
+        <p class="msg"></p>
+      </div>
+    `).join('');
+  }catch(e){
+    loading.textContent = 'Không tải được bài tập. Kiểm tra lại API_URL.';
+  }
+}
+
+async function submitWork(btn){
+  const card = btn.closest('.assignment');
+  const msg  = card.querySelector('.msg');
+  const text = card.querySelector('textarea').value.trim();
+  const fileInput = card.querySelector('input[type=file]');
+  const file = fileInput.files[0];
+
+  if (!text && !file){
+    msg.textContent = 'Em hãy nhập câu trả lời hoặc chọn file trước khi nộp.';
+    msg.className = 'msg err'; return;
+  }
+
+  btn.disabled = true;
+  msg.textContent = 'Đang nộp…'; msg.className = 'msg';
+
+  const body = {
+    action:'submit', email:user.email, name:user.name,
+    assignmentId: card.dataset.id, answerText: text
+  };
+
+  if (file){
+    if (file.size > 8 * 1024 * 1024){
+      msg.textContent = 'File tối đa 8MB. Với file lớn, em tải lên Drive rồi dán link vào ô trả lời.';
+      msg.className='msg err'; btn.disabled=false; return;
+    }
+    body.fileName = file.name;
+    body.mimeType = file.type;
+    body.fileBase64 = await fileToBase64(file);
+  }
+
+  try{
+    const res = await api('POST', body);
+    if (res.ok){
+      msg.textContent = '✓ ' + res.message; msg.className = 'msg ok';
+    } else {
+      msg.textContent = res.error || 'Có lỗi xảy ra'; msg.className='msg err';
+      btn.disabled = false;
+    }
+  }catch(e){
+    msg.textContent = 'Không kết nối được máy chủ.'; msg.className='msg err';
+    btn.disabled = false;
+  }
+}
+
+function fileToBase64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
