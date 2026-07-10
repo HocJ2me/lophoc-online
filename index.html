@@ -91,6 +91,24 @@
   button.submit:disabled{opacity:.5;cursor:not-allowed}
   a.clslink{font-size:13px;color:var(--board);font-weight:500}
 
+  /* ---- Giao diện giáo viên ---- */
+  #teacher .panel{
+    background:#fff;border:2px solid var(--board);border-radius:16px;
+    padding:20px;margin-bottom:36px;
+  }
+  #teacher h2{margin-bottom:10px}
+  #teacher h3{font-size:14px;font-weight:700;color:var(--board);margin:16px 0 6px;
+    text-transform:uppercase;letter-spacing:.06em}
+  #teacher input[type=date]{
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+    font-family:inherit;font-size:14px;
+  }
+  .tbl{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
+  .tbl th,.tbl td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+  .tbl th{background:var(--board);color:#fff;font-weight:700}
+  .tblwrap{overflow-x:auto;margin-top:6px}
+  #teacher .empty{font-size:13.5px;color:#5B6E7B}
+
   #loginGate{
     text-align:center;padding:60px 20px;
   }
@@ -120,6 +138,24 @@
     <div id="gBtn"></div>
   </section>
 
+  <!-- Giao diện quản lý (chỉ hiện khi giáo viên đăng nhập) -->
+  <section id="teacher" class="hidden">
+    <div class="panel">
+      <h2>Quản lý lớp</h2>
+      <div class="row">
+        <input type="date" id="tDate">
+        <button class="submit" onclick="loadDashboard()">Xem dữ liệu ngày này</button>
+        <a class="clslink" href="https://docs.google.com/spreadsheets/d/1Y2TMS1ag2BMksAJJZXSiZMPRYCz_8G93p3JKpf7R8gY/edit" target="_blank" rel="noopener">Google Sheets ↗</a>
+        <a class="clslink" href="https://script.google.com/home/projects/18l4giq_v5o3BYNffreAnlRLYmDK9obk4sdxxaJxGHFsIdouN-AdoibSV/edit" target="_blank" rel="noopener">Apps Script (tổng kết cuối buổi) ↗</a>
+      </div>
+      <p class="msg" id="tMsg"></p>
+      <h3>Điểm danh trong ngày</h3>
+      <div class="tblwrap" id="tAtt"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
+      <h3>Bài nộp trong ngày</h3>
+      <div class="tblwrap" id="tSub"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
+    </div>
+  </section>
+
   <!-- Đã đăng nhập -->
   <section id="app" class="hidden">
     <div class="stamp-card">
@@ -138,6 +174,7 @@
 /* ====== CẤU HÌNH ====== */
 const API_URL   = 'https://script.google.com/macros/s/AKfycbzrjntpOKkR2FGJHcRDVq0whGqrmbSOMckbbcJBkkqt5nsvuHrYQTAcNBEkHWFNs2rz2g/exec';
 const CLIENT_ID = '386110377624-o731ea9cbof5fccheab6b5asarqjj9ka.apps.googleusercontent.com';
+const TEACHER_EMAIL = 'lctuyenvn@gmail.com'; // đăng nhập bằng email này sẽ thấy bảng Quản lý lớp
 
 /* ====== TRẠNG THÁI ====== */
 let user = null; // {email, name, picture}
@@ -172,7 +209,55 @@ function onSignIn(res){
   document.getElementById('userName').textContent = user.name;
   document.getElementById('userPic').src = user.picture;
 
+  if (user.email.toLowerCase() === TEACHER_EMAIL) {
+    document.getElementById('teacher').classList.remove('hidden');
+    const d = new Date();
+    document.getElementById('tDate').value = d.toISOString().slice(0,10);
+    loadDashboard();
+  }
+
   loadAssignments();
+}
+
+/* ====== QUẢN LÝ LỚP (giáo viên) ====== */
+async function loadDashboard(){
+  const msg = document.getElementById('tMsg');
+  let key = localStorage.getItem('tkKey');
+  if (!key){
+    key = prompt('Nhập khoá giáo viên (biến TEACHER_KEY trong Code.gs):');
+    if (!key) return;
+    localStorage.setItem('tkKey', key.trim());
+    key = key.trim();
+  }
+  msg.textContent = 'Đang tải…'; msg.className = 'msg';
+  try{
+    const d = document.getElementById('tDate').value;
+    const r = await fetch(API_URL + '?action=dashboard&key=' + encodeURIComponent(key) + '&date=' + d);
+    const res = await r.json();
+    if (!res.ok){
+      localStorage.removeItem('tkKey');
+      msg.textContent = res.error + ' — tải lại và nhập lại khoá.'; msg.className = 'msg err';
+      return;
+    }
+    msg.textContent = 'Dữ liệu ngày ' + res.date +
+      ' · điểm danh: ' + res.diemDanh.length + ' · bài nộp: ' + res.baiNop.length;
+    msg.className = 'msg ok';
+
+    document.getElementById('tAtt').innerHTML = res.diemDanh.length
+      ? '<table class="tbl"><tr><th>Giờ</th><th>Họ tên</th><th>Email</th></tr>' +
+        res.diemDanh.map(x => '<tr><td>'+esc(x.time)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.email)+'</td></tr>').join('') +
+        '</table>'
+      : '<p class="empty">Chưa có ai điểm danh ngày này.</p>';
+
+    document.getElementById('tSub').innerHTML = res.baiNop.length
+      ? '<table class="tbl"><tr><th>Giờ</th><th>Họ tên</th><th>Bài tập</th><th>Trả lời</th><th>File</th></tr>' +
+        res.baiNop.map(x => '<tr><td>'+esc(x.time)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.baiTapId)+'</td><td>'+esc(x.traLoi)+'</td><td>'+
+          (x.fileUrl ? '<a href="'+esc(x.fileUrl)+'" target="_blank" rel="noopener">Mở file ↗</a>' : '—')+'</td></tr>').join('') +
+        '</table>'
+      : '<p class="empty">Chưa có bài nộp ngày này.</p>';
+  }catch(e){
+    msg.textContent = 'Không kết nối được máy chủ.'; msg.className = 'msg err';
+  }
 }
 
 /* ====== GỌI API ====== */
