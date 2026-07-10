@@ -108,6 +108,18 @@
   .tbl th{background:var(--board);color:#fff;font-weight:700}
   .tblwrap{overflow-x:auto;margin-top:6px}
   #teacher .empty{font-size:13.5px;color:#5B6E7B}
+  .clsrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+    border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px}
+  .clsrow b{min-width:140px;font-size:14px}
+  .clsrow input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;font-family:inherit;font-size:13px}
+  .clsrow .msg{margin-top:0;min-height:auto;flex-basis:100%}
+
+  /* Nút Meet cho học sinh */
+  #meetList{margin-bottom:20px}
+  a.meetbtn{display:inline-block;text-decoration:none;background:var(--board);color:#fff;
+    padding:12px 18px;border-radius:10px;font-weight:700;font-size:14px;margin:0 8px 8px 0}
+  a.meetbtn:hover{background:#173B35}
 
   #loginGate{
     text-align:center;padding:60px 20px;
@@ -153,6 +165,8 @@
       <div class="tblwrap" id="tAtt"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
       <h3>Bài nộp trong ngày</h3>
       <div class="tblwrap" id="tSub"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
+      <h3>Các lớp — thư mục Drive bài nộp &amp; link Meet</h3>
+      <div id="tCls"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
     </div>
   </section>
 
@@ -163,6 +177,8 @@
       <button id="stampBtn" onclick="doAttendance()">Điểm<br>danh</button>
       <p class="msg" id="attMsg"></p>
     </div>
+
+    <div id="meetList"></div>
 
     <h2>Bài tập</h2>
     <p id="loading">Đang tải danh sách bài tập…</p>
@@ -255,9 +271,54 @@ async function loadDashboard(){
           (x.fileUrl ? '<a href="'+esc(x.fileUrl)+'" target="_blank" rel="noopener">Mở file ↗</a>' : '—')+'</td></tr>').join('') +
         '</table>'
       : '<p class="empty">Chưa có bài nộp ngày này.</p>';
+
+    loadClasses(key);
   }catch(e){
     msg.textContent = 'Không kết nối được máy chủ.'; msg.className = 'msg err';
   }
+}
+
+/* Danh sách lớp: sửa thư mục Drive + link Meet ngay trên web */
+async function loadClasses(key){
+  const box = document.getElementById('tCls');
+  try{
+    const r = await fetch(API_URL + '?action=classes&key=' + encodeURIComponent(key));
+    const res = await r.json();
+    if (!res.ok){ box.innerHTML = '<p class="empty">'+esc(res.error)+'</p>'; return; }
+    box.innerHTML = res.classes.length
+      ? res.classes.map(c => `
+        <div class="clsrow" data-lop="${esc(c.name)}">
+          <b>${esc(c.name)}</b>
+          <input type="text" class="cfg-folder" placeholder="ID thư mục Drive chứa bài nộp (bỏ trống = dùng thư mục chung)" value="${esc(c.folderId)}">
+          <input type="text" class="cfg-meet" placeholder="Link Google Meet, vd: https://meet.google.com/abc-defg-hij" value="${esc(c.meetLink)}">
+          <button class="submit" onclick="saveClass(this)">Lưu</button>
+          <p class="msg"></p>
+        </div>`).join('')
+      : '<p class="empty">Chưa có lớp nào đang hoạt động trên Classroom.</p>';
+  }catch(e){
+    box.innerHTML = '<p class="empty">Không tải được danh sách lớp.</p>';
+  }
+}
+
+async function saveClass(btn){
+  const row = btn.closest('.clsrow');
+  const msg = row.querySelector('.msg');
+  btn.disabled = true;
+  msg.textContent = 'Đang lưu…'; msg.className = 'msg';
+  try{
+    const res = await api('POST', {
+      action: 'saveclass',
+      key: localStorage.getItem('tkKey') || '',
+      lop: row.dataset.lop,
+      folderId: row.querySelector('.cfg-folder').value.trim(),
+      meetLink: row.querySelector('.cfg-meet').value.trim()
+    });
+    msg.textContent = res.ok ? '✓ ' + res.message : (res.error || 'Có lỗi xảy ra');
+    msg.className = res.ok ? 'msg ok' : 'msg err';
+  }catch(e){
+    msg.textContent = 'Không kết nối được máy chủ.'; msg.className = 'msg err';
+  }
+  btn.disabled = false;
 }
 
 /* ====== GỌI API ====== */
@@ -304,6 +365,14 @@ async function loadAssignments(){
   try{
     const res = await api('GET');
     loading.classList.add('hidden');
+
+    // Nút vào lớp Meet (nếu giáo viên đã cấu hình link)
+    if (res.meet && res.meet.length){
+      document.getElementById('meetList').innerHTML = res.meet.map(m =>
+        '<a class="meetbtn" href="'+esc(m.meetLink)+'" target="_blank" rel="noopener">🎥 Vào lớp Meet — '+esc(m.lop)+'</a>'
+      ).join('');
+    }
+
     if (!res.assignments || res.assignments.length === 0){
       list.innerHTML = '<p style="font-size:14px;color:#5B6E7B">Chưa có bài tập nào. Quay lại sau nhé!</p>';
       return;
