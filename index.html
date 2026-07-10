@@ -114,6 +114,14 @@
   .clsrow input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:8px;
     padding:8px 10px;font-family:inherit;font-size:13px}
   .clsrow .msg{margin-top:0;min-height:auto;flex-basis:100%}
+  .clsrow select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+    font-family:inherit;font-size:13px;max-width:260px}
+  .stu{display:inline-block;background:var(--chalk);border:1px solid var(--line);
+    border-radius:999px;padding:2px 10px;font-size:12.5px;margin:2px}
+  .stu a{color:var(--err);text-decoration:none;font-weight:700;margin-left:4px}
+  .badge{font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;vertical-align:middle}
+  .badge.cr{background:#E4F2EC;color:#1E7A4E}
+  .badge.web{background:#FFF3D6;color:#8A6400}
 
   /* Nút Meet cho học sinh */
   #meetList{margin-bottom:20px}
@@ -167,6 +175,39 @@
       <div class="tblwrap" id="tSub"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
       <h3>Các lớp — thư mục Drive bài nộp &amp; link Meet</h3>
       <div id="tCls"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
+      <div class="row" style="margin-top:8px">
+        <input type="text" id="newLop" placeholder="Tên lớp mới (quản lý trên web, không cần Classroom)" style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px">
+        <button class="submit" onclick="addClass()">➕ Thêm lớp</button>
+      </div>
+      <p class="msg" id="newLopMsg"></p>
+
+      <h3>Học sinh các lớp</h3>
+      <div id="tStu"><p class="empty">Bấm "Xem dữ liệu" để tải.</p></div>
+
+      <h3>Giao bài tập mới</h3>
+      <div class="clsrow" style="display:block">
+        <div class="row">
+          <select id="wLop"></select>
+          <input type="text" id="wTieuDe" placeholder="Tiêu đề bài tập" style="flex:1;min-width:200px">
+          <input type="date" id="wHanNop" title="Hạn nộp">
+        </div>
+        <textarea id="wMoTa" placeholder="Mô tả / hướng dẫn (không bắt buộc)" style="width:100%;min-height:60px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;margin-top:8px"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="submit" id="wBtn" onclick="createWork()">Giao bài</button>
+          <span class="empty">Lớp trùng tên lớp Classroom sẽ tự đăng lên cả Classroom.</span>
+        </div>
+        <p class="msg" id="wMsg"></p>
+      </div>
+
+      <h3>Gửi thông báo</h3>
+      <div class="clsrow" style="display:block">
+        <div class="row">
+          <select id="aLop"></select>
+          <input type="text" id="aNoiDung" placeholder="Nội dung thông báo cho học sinh" style="flex:1;min-width:220px">
+          <button class="submit" onclick="sendAnnounce()">Gửi</button>
+        </div>
+        <p class="msg" id="aMsg"></p>
+      </div>
     </div>
   </section>
 
@@ -180,9 +221,13 @@
 
     <div id="meetList"></div>
 
+    <div id="annList"></div>
+
     <h2>Bài tập</h2>
     <p id="loading">Đang tải danh sách bài tập…</p>
     <div id="assignmentList"></div>
+
+    <div id="myGrades" style="margin-top:28px"></div>
   </section>
 </main>
 
@@ -233,6 +278,22 @@ function onSignIn(res){
   }
 
   loadAssignments();
+  loadMyGrades();
+}
+
+/* Học sinh xem điểm & nhận xét của mình */
+async function loadMyGrades(){
+  try{
+    const res = await api('POST', { action:'mygrades', email: user.email });
+    if (!res.ok) return;
+    const has = res.grades.filter(g => g.diem !== '' || g.nhanXet);
+    if (!has.length) return;
+    document.getElementById('myGrades').innerHTML =
+      '<h2>Điểm &amp; nhận xét của em</h2><div class="tblwrap"><table class="tbl">' +
+      '<tr><th>Bài tập</th><th>Nộp lúc</th><th>Điểm</th><th>Nhận xét của thầy/cô</th></tr>' +
+      has.map(g => '<tr><td>'+esc(g.baiTap)+'</td><td>'+esc(g.time)+'</td><td><b>'+esc(g.diem)+'</b></td><td>'+esc(g.nhanXet)+'</td></tr>').join('') +
+      '</table></div>';
+  }catch(e){}
 }
 
 /* ====== QUẢN LÝ LỚP (giáo viên) ====== */
@@ -266,13 +327,17 @@ async function loadDashboard(){
       : '<p class="empty">Chưa có ai điểm danh ngày này.</p>';
 
     document.getElementById('tSub').innerHTML = res.baiNop.length
-      ? '<table class="tbl"><tr><th>Giờ</th><th>Họ tên</th><th>Bài tập</th><th>Trả lời</th><th>File</th></tr>' +
-        res.baiNop.map(x => '<tr><td>'+esc(x.time)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.baiTapId)+'</td><td>'+esc(x.traLoi)+'</td><td>'+
-          (x.fileUrl ? '<a href="'+esc(x.fileUrl)+'" target="_blank" rel="noopener">Mở file ↗</a>' : '—')+'</td></tr>').join('') +
+      ? '<table class="tbl"><tr><th>Giờ</th><th>Họ tên</th><th>Bài tập</th><th>Trả lời</th><th>File</th><th>Điểm</th><th>Nhận xét</th><th></th></tr>' +
+        res.baiNop.map(x => '<tr data-row="'+x.row+'"><td>'+esc(x.time)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.baiTapId)+'</td><td>'+esc(x.traLoi)+'</td><td>'+
+          (x.fileUrl ? '<a href="'+esc(x.fileUrl)+'" target="_blank" rel="noopener">Mở ↗</a>' : '—')+'</td>'+
+          '<td><input class="g-diem" type="number" min="0" max="10" step="0.5" value="'+esc(x.diem)+'" style="width:64px"></td>'+
+          '<td><input class="g-nx" type="text" value="'+esc(x.nhanXet)+'" placeholder="Nhận xét cho em này" style="min-width:170px;width:96%"></td>'+
+          '<td><button class="submit" onclick="saveGrade(this)">Lưu</button></td></tr>').join('') +
         '</table>'
       : '<p class="empty">Chưa có bài nộp ngày này.</p>';
 
     loadClasses(key);
+    loadStudents(key);
   }catch(e){
     msg.textContent = 'Không kết nối được máy chủ.'; msg.className = 'msg err';
   }
@@ -285,19 +350,131 @@ async function loadClasses(key){
     const r = await fetch(API_URL + '?action=classes&key=' + encodeURIComponent(key));
     const res = await r.json();
     if (!res.ok){ box.innerHTML = '<p class="empty">'+esc(res.error)+'</p>'; return; }
+    window._classes = res.classes;
     box.innerHTML = res.classes.length
       ? res.classes.map(c => `
         <div class="clsrow" data-lop="${esc(c.name)}">
-          <b>${esc(c.name)}</b>
+          <b>${esc(c.name)} ${c.coClassroom ? '<span class="badge cr">có Classroom</span>' : '<span class="badge web">chỉ web</span>'}</b>
           <input type="text" class="cfg-folder" placeholder="ID thư mục Drive chứa bài nộp (bỏ trống = dùng thư mục chung)" value="${esc(c.folderId)}">
           <input type="text" class="cfg-meet" placeholder="Link Google Meet, vd: https://meet.google.com/abc-defg-hij" value="${esc(c.meetLink)}">
           <button class="submit" onclick="saveClass(this)">Lưu</button>
           <p class="msg"></p>
         </div>`).join('')
-      : '<p class="empty">Chưa có lớp nào đang hoạt động trên Classroom.</p>';
+      : '<p class="empty">Chưa có lớp nào. Thêm lớp mới ở ô bên dưới.</p>';
+
+    const opts = res.classes.map(c => '<option value="'+esc(c.name)+'">'+esc(c.name)+'</option>').join('');
+    document.getElementById('wLop').innerHTML = opts;
+    document.getElementById('aLop').innerHTML = '<option value="">Tất cả các lớp</option>' + opts;
   }catch(e){
     box.innerHTML = '<p class="empty">Không tải được danh sách lớp.</p>';
   }
+}
+
+function tk(){ return localStorage.getItem('tkKey') || ''; }
+
+async function addClass(){
+  const inp = document.getElementById('newLop');
+  const msg = document.getElementById('newLopMsg');
+  const name = inp.value.trim();
+  if (!name){ msg.textContent = 'Nhập tên lớp trước.'; msg.className = 'msg err'; return; }
+  const res = await api('POST', { action:'saveclass', key: tk(), lop: name, folderId:'', meetLink:'' });
+  msg.textContent = res.ok ? '✓ ' + res.message : (res.error || 'Có lỗi xảy ra');
+  msg.className = res.ok ? 'msg ok' : 'msg err';
+  if (res.ok){ inp.value=''; loadClasses(tk()); loadStudents(tk()); }
+}
+
+/* Quản lý học sinh từng lớp */
+async function loadStudents(key){
+  const box = document.getElementById('tStu');
+  try{
+    const r = await fetch(API_URL + '?action=students&key=' + encodeURIComponent(key));
+    const res = await r.json();
+    if (!res.ok){ box.innerHTML = '<p class="empty">'+esc(res.error)+'</p>'; return; }
+    const byLop = {};
+    (window._classes || []).forEach(c => byLop[c.name] = []);
+    res.students.forEach(s => { (byLop[s.lop] = byLop[s.lop] || []).push(s); });
+    const lops = Object.keys(byLop);
+    box.innerHTML = lops.length ? lops.map(lop => `
+      <div class="clsrow" data-lop="${esc(lop)}" style="display:block">
+        <b>${esc(lop)}</b> <span class="empty">— ${(byLop[lop]||[]).length} học sinh</span>
+        <div style="margin:6px 0">${(byLop[lop]||[]).map(s =>
+          '<span class="stu">'+esc(s.name || s.email)+' <a href="#" onclick="return delStudent(this)" data-email="'+esc(s.email)+'" title="Xoá khỏi lớp">✕</a></span>'
+        ).join(' ') || '<span class="empty">Chưa có học sinh — thêm bên dưới.</span>'}</div>
+        <div class="row">
+          <input type="email" class="stu-email" placeholder="email.hocsinh@gmail.com">
+          <input type="text" class="stu-name" placeholder="Họ tên học sinh">
+          <button class="submit" onclick="addStudent(this)">Thêm</button>
+        </div>
+        <p class="msg"></p>
+      </div>`).join('') : '<p class="empty">Chưa có lớp nào.</p>';
+  }catch(e){
+    box.innerHTML = '<p class="empty">Không tải được danh sách học sinh.</p>';
+  }
+}
+
+async function addStudent(btn){
+  const row = btn.closest('.clsrow');
+  const msg = row.querySelector('.msg');
+  const email = row.querySelector('.stu-email').value.trim();
+  const name  = row.querySelector('.stu-name').value.trim();
+  if (!email){ msg.textContent = 'Nhập email học sinh.'; msg.className='msg err'; return; }
+  btn.disabled = true;
+  const res = await api('POST', { action:'savestudent', key: tk(), lop: row.dataset.lop, email: email, name: name });
+  msg.textContent = res.ok ? '✓ ' + res.message : (res.error || 'Có lỗi xảy ra');
+  msg.className = res.ok ? 'msg ok' : 'msg err';
+  btn.disabled = false;
+  if (res.ok) loadStudents(tk());
+}
+
+async function delStudent(a){
+  const row = a.closest('.clsrow');
+  if (!confirm('Xoá ' + a.dataset.email + ' khỏi lớp ' + row.dataset.lop + '?')) return false;
+  const res = await api('POST', { action:'delstudent', key: tk(), lop: row.dataset.lop, email: a.dataset.email });
+  if (res.ok) loadStudents(tk()); else alert(res.error || 'Có lỗi xảy ra');
+  return false;
+}
+
+/* Giao bài tập từ web */
+async function createWork(){
+  const msg = document.getElementById('wMsg');
+  const btn = document.getElementById('wBtn');
+  const lop = document.getElementById('wLop').value;
+  const tieuDe = document.getElementById('wTieuDe').value.trim();
+  if (!lop || !tieuDe){ msg.textContent = 'Chọn lớp và nhập tiêu đề.'; msg.className='msg err'; return; }
+  btn.disabled = true; msg.textContent = 'Đang giao bài…'; msg.className = 'msg';
+  const res = await api('POST', { action:'creatework', key: tk(), lop: lop, tieuDe: tieuDe,
+    moTa: document.getElementById('wMoTa').value.trim(),
+    hanNop: document.getElementById('wHanNop').value });
+  msg.textContent = res.ok ? '✓ ' + res.message + ' — học sinh thấy ngay trên web.' : (res.error || 'Có lỗi xảy ra');
+  msg.className = res.ok ? 'msg ok' : 'msg err';
+  btn.disabled = false;
+  if (res.ok){ document.getElementById('wTieuDe').value=''; document.getElementById('wMoTa').value=''; }
+}
+
+/* Gửi thông báo */
+async function sendAnnounce(){
+  const msg = document.getElementById('aMsg');
+  const nd = document.getElementById('aNoiDung').value.trim();
+  if (!nd){ msg.textContent = 'Nhập nội dung thông báo.'; msg.className='msg err'; return; }
+  msg.textContent = 'Đang gửi…'; msg.className = 'msg';
+  const res = await api('POST', { action:'announce', key: tk(),
+    lop: document.getElementById('aLop').value, noiDung: nd });
+  msg.textContent = res.ok ? '✓ ' + res.message : (res.error || 'Có lỗi xảy ra');
+  msg.className = res.ok ? 'msg ok' : 'msg err';
+  if (res.ok) document.getElementById('aNoiDung').value = '';
+}
+
+/* Chấm điểm bài nộp */
+async function saveGrade(btn){
+  const tr = btn.closest('tr');
+  btn.disabled = true;
+  try{
+    const res = await api('POST', { action:'grade', key: tk(), row: Number(tr.dataset.row),
+      diem: tr.querySelector('.g-diem').value,
+      nhanXet: tr.querySelector('.g-nx').value.trim() });
+    btn.textContent = res.ok ? '✓' : 'Lỗi';
+  }catch(e){ btn.textContent = 'Lỗi'; }
+  setTimeout(() => { btn.textContent = 'Lưu'; btn.disabled = false; }, 1500);
 }
 
 async function saveClass(btn){
@@ -371,6 +548,14 @@ async function loadAssignments(){
       document.getElementById('meetList').innerHTML = res.meet.map(m =>
         '<a class="meetbtn" href="'+esc(m.meetLink)+'" target="_blank" rel="noopener">🎥 Vào lớp Meet — '+esc(m.lop)+'</a>'
       ).join('');
+    }
+
+    // Thông báo từ giáo viên
+    if (res.thongBao && res.thongBao.length){
+      document.getElementById('annList').innerHTML = '<h2>Thông báo</h2>' +
+        res.thongBao.map(t =>
+          '<div class="assignment"><div class="meta">'+esc(t.lop)+' · '+esc(t.time)+'</div>'+
+          '<p class="desc">'+esc(t.noiDung)+'</p></div>').join('');
     }
 
     if (!res.assignments || res.assignments.length === 0){
