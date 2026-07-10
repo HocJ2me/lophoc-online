@@ -160,7 +160,10 @@ window.onload = () => {
 
 function onSignIn(res){
   // Giải mã JWT (chỉ đọc thông tin hiển thị, không dùng làm bảo mật phía client)
-  const payload = JSON.parse(atob(res.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+  // atob() trả về chuỗi byte Latin-1 nên phải decode lại UTF-8, nếu không tên tiếng Việt sẽ vỡ font
+  const b64 = res.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const payload = JSON.parse(new TextDecoder('utf-8').decode(bytes));
   user = { email: payload.email, name: payload.name, picture: payload.picture };
 
   document.getElementById('loginGate').classList.add('hidden');
